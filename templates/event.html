@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Event Face Scan – Simple Badge (Photo, Name, Org)</title>
+<style>
+  :root { --ink:#fff; }
+  body {
+    margin:0; height:100vh; display:flex; flex-direction:row; background:#f5f5f5;
+    font-family: Arial, Helvetica, sans-serif;
+  }
+
+  /* LEFT: Camera + actions */
+  #camera-container {
+    flex:1; min-width: 360px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px;
+    border-right:2px solid #ddd; background:#fafafa; padding:20px;
+  }
+  video { width:80%; max-width:560px; aspect-ratio: 4 / 3; background:#000;
+          border-radius:12px; border:2px solid #222; }
+  .actions { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
+  button {
+    padding:10px 18px; font-size:16px; border-radius:10px; border:1px solid #222;
+    background:#fff; cursor:pointer;
+  }
+  button:hover { background:#f2f2f2; }
+
+  /* RIGHT: Badge area */
+  #right-pane {
+    flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    background:#eef1f5; padding:18px;
+  }
+  #pane-title { margin:2px 0 8px; color:#1b1b1b; }
+
+  /* Badge template – EXACT 256x369 */
+  .badge {
+    width: 256px;
+    height: 369px;
+    background: url('/static/badge_bg.jpg') no-repeat center center;
+    background-size: cover;
+    border-radius: 10px;
+    position: relative;
+    box-shadow: 0 10px 26px rgba(0,0,0,.14);
+    user-select: none;
+  }
+
+  /* Draggable elements */
+  .movable {
+    position: absolute;
+    color: var(--ink);
+    text-shadow: 0 1px 2px rgba(0,0,0,.35);
+    cursor: default;
+    touch-action: none;
+  }
+
+  /* final positions requested by user */
+  #el-photo {
+    width: 120px; height: 120px; object-fit: cover;
+    border-radius: 12px; border: 2px solid rgba(255,255,255,.95);
+    left: 65px; top: 93px;
+    background:#d9d9d9;
+  }
+  #el-name {
+    font-size: 18px; font-weight: 800;
+    left: 24px; top: 227px; width: 208px; text-align:center;
+  }
+  #el-org  {
+    font-size: 14px; font-weight: 700;
+    left: 26px; top: 268px; width: 204px; text-align:center;
+  }
+
+  /* Edit mode visual */
+  .editing .movable { outline: 2px dashed rgba(0,150,255,0.9); border-radius:6px; padding:2px 4px; }
+  #edit-indicator {
+    position: fixed;
+    left: 20px;
+    bottom: 20px;
+    background: rgba(0,150,255,0.95);
+    color: #fff;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-weight:700;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.18);
+    display:none;
+    z-index:9999;
+  }
+
+  @media print {
+    body { background:#fff; }
+    #camera-container, #pane-title, #print-btn { display:none !important; }
+    #right-pane { padding:0; margin:0; }
+    .badge { box-shadow:none; margin:0 auto; }
+  }
+</style>
+</head>
+<body>
+
+<!-- LEFT: Camera -->
+<div id="camera-container">
+  <video id="video" autoplay playsinline></video>
+  <div class="actions">
+    <button id="capture-btn">Scan Face</button>
+    <button id="print-btn">Print Badge</button>
+  </div>
+</div>
+
+<!-- RIGHT: Badge -->
+<div id="right-pane">
+  <h2 id="pane-title">Latest Scanned Badge</h2>
+  <div id="badge-slot"></div>
+</div>
+
+<!-- Edit mode indicator -->
+<div id="edit-indicator">Position Edit: ON — drag to move. Press P to lock & save.</div>
+
+<!-- Badge template -->
+<template id="badge-template">
+  <div class="badge" id="current-badge">
+    <img id="el-photo" class="movable" data-key="photo" alt="Photo" />
+    <div id="el-name"  class="movable" data-key="name">NAME</div>
+    <div id="el-org"   class="movable" data-key="org">Organization</div>
+  </div>
+</template>
+
+<script>
+const video = document.getElementById('video');
+navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
+  .then(stream => video.srcObject = stream)
+  .catch(err => console.error('Camera error:', err));
+
+const captureBtn = document.getElementById('capture-btn');
+const printBtn   = document.getElementById('print-btn');
+const badgeSlot  = document.getElementById('badge-slot');
+const tpl        = document.getElementById('badge-template');
+
+const POS_KEY_PREFIX = 'badgePos_';
+const MOVABLE_KEYS = ['photo','name','org'];
+
+let positionEditMode = false;
+let currentBadgeEl = null;
+const editIndicator = document.getElementById('edit-indicator');
+
+function renderBadge(data){
+  badgeSlot.innerHTML = '';
+  const node = tpl.content.cloneNode(true);
+  const badgeEl = node.querySelector('#current-badge');
+
+  const photoPath = (data.photo_path || '').trim();
+  node.getElementById('el-photo').src = photoPath
+    ? `${photoPath}?t=${Date.now()}`
+    : 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><rect width="100%" height="100%" fill="%23d9d9d9"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="12" fill="%23777">No Photo</text></svg>';
+
+  node.getElementById('el-name').textContent = data.name || '-';
+  node.getElementById('el-org').textContent  = data.organization || '-';
+
+  badgeSlot.appendChild(node);
+  currentBadgeEl = badgeEl;
+  initMovables(badgeEl);
+}
+
+function initMovables(badgeEl){
+  const movables = Array.from(badgeEl.querySelectorAll('.movable'));
+
+  movables.forEach(el => {
+    const key = el.dataset.key;
+    const saved = localStorage.getItem(POS_KEY_PREFIX + key);
+    if (saved) {
+      try {
+        const { left, top } = JSON.parse(saved);
+        el.style.left = left + 'px';
+        el.style.top  = top  + 'px';
+      } catch {}
+    }
+    attachDrag(el, badgeEl);
+  });
+}
+
+function attachDrag(el, container){
+  let dragging = false;
+  let startX = 0, startY = 0;
+  let elStartLeft = 0, elStartTop = 0;
+
+  const onPointerDown = (e) => {
+    if (!positionEditMode) return;
+    dragging = true;
+    el.setPointerCapture?.(e.pointerId);
+    startX = e.clientX;
+    startY = e.clientY;
+    elStartLeft = el.offsetLeft;
+    elStartTop  = el.offsetTop;
+    e.preventDefault();
+  };
+
+  const onPointerMove = (e) => {
+    if (!dragging) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    let newLeft = elStartLeft + dx;
+    let newTop  = elStartTop  + dy;
+    const maxLeft = container.clientWidth - el.clientWidth;
+    const maxTop  = container.clientHeight - el.clientHeight;
+    newLeft = Math.max(0, Math.min(maxLeft, newLeft));
+    newTop  = Math.max(0, Math.min(maxTop, newTop));
+    el.style.left = newLeft + 'px';
+    el.style.top  = newTop + 'px';
+  };
+
+  const onPointerUp = (e) => {
+    if (!dragging) return;
+    dragging = false;
+    const key = el.dataset.key;
+    localStorage.setItem(POS_KEY_PREFIX + key, JSON.stringify({
+      left: el.offsetLeft, top: el.offsetTop
+    }));
+  };
+
+  el.addEventListener('pointerdown', onPointerDown);
+  window.addEventListener('pointermove', onPointerMove);
+  window.addEventListener('pointerup', onPointerUp);
+}
+
+function toggleEditMode(){
+  if (!currentBadgeEl) return;
+  positionEditMode = !positionEditMode;
+  currentBadgeEl.classList.toggle('editing', positionEditMode);
+  editIndicator.style.display = positionEditMode ? 'block' : 'none';
+}
+
+window.addEventListener('keydown', (ev)=>{
+  if(ev.key === 'p' || ev.key === 'P'){
+    ev.preventDefault();
+    toggleEditMode();
+  }
+});
+
+captureBtn.addEventListener('click', async () => {
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const imageData = canvas.toDataURL('image/png');
+
+    const res = await fetch('/scan_face', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: imageData })
+    });
+
+    if(!res.ok) throw new Error(`Scan failed (${res.status})`);
+    const data = await res.json();
+
+    if (data.found) renderBadge(data);
+    else alert('No match found for this scan');
+  } catch (e) {
+    console.error(e);
+    alert('There was a problem scanning. Please try again.');
+  }
+});
+
+printBtn.addEventListener('click', ()=>{
+  if(!document.getElementById('current-badge')){
+    alert('No badge to print yet.');
+    return;
+  }
+  window.print();
+});
+
+renderBadge({
+  name: 'NAME',
+  organization: 'Organization',
+  photo_path: ''
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Registration</title>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%); min-height:100vh; display:flex; justify-content:center; align-items:center; padding:20px; }
+        .registration-container { background-color:white; border-radius:15px; box-shadow:0 10px 30px rgba(0,0,0,0.2); width:100%; max-width:500px; padding:30px; margin:20px; }
+        h1 { text-align:center; color:#333; margin-bottom:25px; font-size:28px; }
+        .input-group { margin-bottom:20px; }
+        label { display:block; margin-bottom:8px; font-weight:600; color:#444; }
+        input[type="text"], input[type="tel"], input[type="email"] { width:100%; padding:12px 15px; border:2px solid #ddd; border-radius:8px; font-size:16px; transition:border-color 0.3s; }
+        input:focus { border-color:#6a11cb; outline:none; }
+        input:disabled { background-color:#f5f5f5; cursor:not-allowed; }
+        .photo-options { display:flex; flex-direction:column; gap:15px; }
+        .upload-btn, .camera-btn, .capture-btn, .cancel-camera-btn, .retake-btn { padding:12px 20px; border:none; border-radius:8px; font-size:16px; cursor:pointer; transition:all 0.3s; text-align:center; font-weight:600; }
+        .upload-btn { background-color:#4CAF50; color:white; }
+        .camera-btn { background-color:#2196F3; color:white; }
+        .capture-btn { background-color:#FF5722; color:white; }
+        .cancel-camera-btn { background-color:#f44336; color:white; }
+        .retake-btn { background-color:#FF9800; color:white; margin-top:10px; }
+        button:disabled { opacity:0.6; cursor:not-allowed; }
+        .upload-btn:hover, .camera-btn:hover, .capture-btn:hover, .cancel-camera-btn:hover, .retake-btn:hover { opacity:0.9; transform:translateY(-2px); }
+        .camera-container { display:flex; flex-direction:column; gap:15px; }
+        .camera-feed { width:100%; border-radius:8px; border:2px solid #ddd; background-color:#000; }
+        .camera-controls { display:flex; gap:10px; justify-content:center; }
+        .photo-preview { text-align:center; }
+        .preview-image { max-width:100%; max-height:200px; border-radius:8px; border:2px solid #ddd; margin-top:10px; }
+        .error-message { background-color:#ffebee; color:#c62828; padding:12px; border-radius:8px; margin:15px 0; text-align:center; font-weight:500; }
+        .success-message { background-color:#e8f5e9; color:#2e7d32; padding:12px; border-radius:8px; margin:15px 0; text-align:center; font-weight:500; }
+        .register-button { width:100%; padding:15px; background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%); color:white; border:none; border-radius:8px; font-size:18px; font-weight:600; cursor:pointer; transition:all 0.3s; }
+        .register-button:hover:not(:disabled) { transform:translateY(-3px); box-shadow:0 5px 15px rgba(0,0,0,0.2); }
+        .register-button:disabled { background:#cccccc; cursor:not-allowed; }
+    </style>
+</head>
+<body>
+    <div class="registration-container">
+        <h1>User Registration</h1>
+
+        <form id="registrationForm" class="registration-form" enctype="multipart/form-data" method="POST" action="/preregister">
+            <!-- Name -->
+            <div class="input-group">
+                <label for="name">Your Name:</label>
+                <input type="text" id="name" name="name" placeholder="Enter your name" required />
+            </div>
+
+            <!-- Organization -->
+            <div class="input-group">
+                <label for="organization">Organization Name:</label>
+                <input type="text" id="organization" name="organization" placeholder="Enter your organization" required />
+            </div>
+
+            <!-- Phone -->
+            <div class="input-group">
+                <label for="phone">Phone Number:</label>
+                <input type="tel" id="phone" name="phone" placeholder="Enter your phone number" pattern="[0-9]{10}" required />
+            </div>
+
+            <!-- Email -->
+            <div class="input-group">
+                <label for="email">Email Address:</label>
+                <input type="email" id="email" name="email" placeholder="Enter your email address" required />
+            </div>
+
+            <!-- Photo Section -->
+            <div class="input-group">
+                <label>Photo:</label>
+                <div id="photoOptions" class="photo-options">
+                    <!-- Upload Photo -->
+                    <label class="upload-btn">
+                        Upload Photo
+                        <input type="file" id="photoUpload" name="photo" accept="image/*" style="display: none" required />
+                    </label>
+
+                    <!-- Camera Option -->
+                    <div class="camera-section">
+                        <button type="button" id="startCamera" class="camera-btn">Take Picture</button>
+                    </div>
+                </div>
+
+                <div id="cameraContainer" class="camera-container" style="display: none;">
+                    <video id="video" class="camera-feed" autoplay playsinline></video>
+                    <div class="camera-controls">
+                        <button type="button" id="capturePhoto" class="capture-btn">Capture Photo</button>
+                        <button type="button" id="cancelCamera" class="cancel-camera-btn">Cancel</button>
+                    </div>
+                </div>
+
+                <div id="photoPreview" class="photo-preview" style="display: none;">
+                    <p>Preview:</p>
+                    <img id="previewImage" class="preview-image" />
+                    <button type="button" id="retakePhoto" class="retake-btn">Retake</button>
+                </div>
+                
+                <canvas id="canvas" style="display: none;"></canvas>
+            </div>
+
+            <!-- Messages -->
+            <div id="errorMessage" class="error-message" style="display: none;"></div>
+            <div id="successMessage" class="success-message" style="display: none;"></div>
+
+            <!-- Submit -->
+            <button type="submit" id="registerButton" class="register-button">Register</button>
+        </form>
+    </div>
+
+    <script>
+        const photoUpload = document.getElementById('photoUpload');
+        const startCameraBtn = document.getElementById('startCamera');
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const capturePhotoBtn = document.getElementById('capturePhoto');
+        const cancelCameraBtn = document.getElementById('cancelCamera');
+        const photoOptions = document.getElementById('photoOptions');
+        const cameraContainer = document.getElementById('cameraContainer');
+        const photoPreview = document.getElementById('photoPreview');
+        const previewImage = document.getElementById('previewImage');
+        const retakePhotoBtn = document.getElementById('retakePhoto');
+        const registrationForm = document.getElementById('registrationForm');
+        const errorMessage = document.getElementById('errorMessage');
+        const successMessage = document.getElementById('successMessage');
+
+        let stream = null;
+
+        // Start camera
+        startCameraBtn.addEventListener('click', async () => {
+            try {
+                cameraContainer.style.display = 'flex';
+                photoOptions.style.display = 'none';
+                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+                video.srcObject = stream;
+                video.play();
+            } catch (err) {
+                alert('Camera access failed.');
+            }
+        });
+
+        // Capture photo from camera
+        capturePhotoBtn.addEventListener('click', () => {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            canvas.toBlob(blob => {
+                const file = new File([blob], 'profile.png', { type: 'image/png' });
+                // Add captured photo to input file so Flask can read it
+                const dataTransfer = new DataTransfer();
+                dataTransfer.items.add(file);
+                photoUpload.files = dataTransfer.files;
+
+                // Show preview
+                previewImage.src = URL.createObjectURL(file);
+                photoPreview.style.display = 'block';
+                cameraContainer.style.display = 'none';
+            }, 'image/png');
+
+            // Stop camera
+            if (stream) stream.getTracks().forEach(track => track.stop());
+        });
+
+        // Cancel camera
+        cancelCameraBtn.addEventListener('click', () => {
+            if (stream) stream.getTracks().forEach(track => track.stop());
+            cameraContainer.style.display = 'none';
+            photoOptions.style.display = 'flex';
+        });
+
+        // Retake photo
+        retakePhotoBtn.addEventListener('click', () => {
+            photoUpload.value = '';
+            photoPreview.style.display = 'none';
+            photoOptions.style.display = 'flex';
+        });
+
+        // Submit form via AJAX to show messages without reload
+        registrationForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            errorMessage.style.display = 'none';
+            successMessage.style.display = 'none';
+
+            const formData = new FormData(registrationForm);
+
+            try {
+                const res = await fetch('/preregister', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await res.json();
+
+                if (result.success) {
+                    successMessage.innerText = result.message;
+                    successMessage.style.display = 'block';
+                    registrationForm.reset();
+                    photoPreview.style.display = 'none';
+                    photoOptions.style.display = 'flex';
+                } else {
+                    errorMessage.innerText = result.message;
+                    errorMessage.style.display = 'block';
+                }
+            } catch (err) {
+                errorMessage.innerText = 'Registration failed. Try again.';
+                errorMessage.style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>

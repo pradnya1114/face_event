@@ -1,0 +1,6 @@
+venv/
+__pycache__/
+*.pyc
+.env
+.github
+win_arm64-wheels-main
