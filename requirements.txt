@@ -15,7 +15,6 @@ asttokens==3.0.0
 astunparse==1.6.3
 attrs==25.3.0
 auto-py-to-exe==2.46.0
-av==14.4.0
 bleak==1.0.1
 blinker==1.9.0
 bottle==0.13.4
